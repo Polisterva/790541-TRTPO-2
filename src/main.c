@@ -7,6 +7,7 @@
 #include <driver/uart.h>
 #include <driver/gpio.h>
 
+#include "log.h"
 #include "nmea.h"
 
 #include "defines.h"
@@ -99,7 +100,8 @@ static void uart_init() {
 
 void app_main() {
 	exchange_t* exchangeData = initExchange();
-
+	
+	log_init();
 	uart_init();
 
 	ESP_ERROR_CHECK( nvs_flash_init() );
