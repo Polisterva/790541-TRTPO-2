@@ -4,9 +4,9 @@
 #include <esp_wifi.h>
 
 #include "defines.h"
-#include "httpd.h"
+#include "log.h"
 
-#define TAG_HTTPD "httpd"
+#include "httpd.h"
 
 static esp_err_t httpd_root_handler(httpd_req_t *req) {
   	httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
@@ -25,8 +25,8 @@ static esp_err_t httpd_root_handler(httpd_req_t *req) {
 }
 
 void httpd_watch_task(void *pvData) {
-	httpd_handle_t server = NULL;
-	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+	httpd_handle_t server = NULL; // указатель на http сервер
+	httpd_config_t config = HTTPD_DEFAULT_CONFIG(); // дефолнтые значения конфигурации сервера
 
 	exchange_t *exData = initExchange();
 
@@ -35,6 +35,9 @@ void httpd_watch_task(void *pvData) {
 		{.uri = "/",.method = HTTP_GET,.handler = httpd_root_handler,.user_ctx = (void*)exData},
 	};
 
+	// .max_uri_handlers по умолчанию 8
+	config.max_uri_handlers = (sizeof(httpd_config)/sizeof(httpd_config[0]));
+
 	while(1) {
 		EventBits_t uxBits = xEventGroupWaitBits(exData->mainEventGroup, 
 			WIFI_CONNECTED_BIT | WIFI_DISCONNECT_BIT, 
@@ -42,10 +45,31 @@ void httpd_watch_task(void *pvData) {
 
 		if ((uxBits & WIFI_CONNECTED_BIT)  && (server == NULL)) {
 			// Подключение к вайфаю, старт сервера
-			ESP_LOGI(TAG_HTTPD, "Starting server on port: '%d'", config.server_port);
+			ESP_LOGI(log_name(TAG_HTTPD), "Starting server on port: '%d'", config.server_port);
+
+			if (httpd_start(&server, &config) == ESP_OK) {
+				// Set URI handlers
+
+				ESP_LOGI(log_name(TAG_HTTPD), "Registering URI handlers");
+
+				esp_err_t err;
+				for(uint16_t i=0; i<config.max_uri_handlers; i++){
+					err = httpd_register_uri_handler(server, &httpd_config[i]);
+
+					ESP_LOGI(log_name(TAG_HTTPD), "httpd '%s': %d %s", 
+						httpd_config[i].uri, 
+						err, esp_err_to_name(err)
+					);
+				}
+
+			} else {
+				ESP_LOGE(log_name(TAG_HTTPD), "Error starting server!");
+				server = NULL;
+			}
+
 		} else if (uxBits & WIFI_DISCONNECT_BIT && server != NULL) {
 			// Отключился от вайфая последний юзер, останавливаем сервер
-			ESP_LOGI(TAG_HTTPD, "WiFi fail, stopping server!");
+			ESP_LOGI(log_name(TAG_HTTPD), "WiFi fail, stopping server!");
 		}
 	}
 }
