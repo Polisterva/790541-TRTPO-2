@@ -3,12 +3,15 @@
 #include <nvs_flash.h>
 #include <esp_event.h>
 #include <esp_wifi.h>
+#include <esp_log.h>
 
 #include <driver/uart.h>
 #include <driver/gpio.h>
 
+#include "log.h"
 #include "nmea.h"
 #include "httpd.h"
+#include "adc.h"
 
 #include "defines.h"
 #include "cfg.h"
@@ -97,11 +100,26 @@ static void uart_init() {
 	uart_set_pin(UART_NUM, UART_TX, UART_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 }
 
+void pump_init() {
+	gpio_config_t io_conf = {
+		.mode = GPIO_MODE_OUTPUT,
+		.pin_bit_mask = (1ULL<<PUMP_PIN),
+		.pull_down_en = 0,
+		.pull_up_en = 0,
+	};
+
+	if(gpio_config(&io_conf) != ESP_OK)
+		ESP_LOGE(TAG_OILER, "Failed to set GPIO");
+}
 
 void app_main() {
 	exchange_t* exchangeData = initExchange();
-
+	
+	log_init();
 	uart_init();
+
+	pump_init(); // Инициализация GPIO для насоса
+	adc_init(); // Инициализация ADC GPIO для датчика влажности
 
 	ESP_ERROR_CHECK( nvs_flash_init() );
 	ESP_ERROR_CHECK( esp_event_loop_create_default() );
@@ -114,4 +132,9 @@ void app_main() {
 
 	// Задача http сервера
 	xTaskCreate(httpd_watch_task, "http_watch", 4*1024, (void*)(exchangeData), 7, NULL); 
+	
+	// Чтение значений датчика влажности
+	// Задача с низким приоритетом
+	xTaskCreate(hds_task, "hds_read_task", 4*1024, (void*)(exchangeData), 1, NULL); 
+
 }
