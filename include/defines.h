@@ -15,9 +15,6 @@
 
 #define PUMP_PIN GPIO_NUM_26
 
-#define TAG_OILER "oiler"
-#define TAG_HDS "hds"
-
 #define _sysName "oiler v2 rtos esp32"
 
 typedef struct { // Очереди сообщений и событие
@@ -44,7 +41,6 @@ typedef struct {
 // обновление данных одометра
 #define GPS_POINT_READY     BIT2
 #define ODO_UPDATED		    BIT3
-
 
 extern exchange_t* initExchange();
 extern void ts_update(int64_t *ts);
